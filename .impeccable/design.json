@@ -1,0 +1,23 @@
+{
+  "schema": "impeccable-design-1",
+  "product": "Caissa",
+  "direction": "real-time chess concourse",
+  "mode": "operate",
+  "palette": {
+    "deep": "#111416",
+    "panel": "#191d1e",
+    "panel2": "#202627",
+    "line": "#303738",
+    "ink": "#edf0e7",
+    "muted": "#8c9693",
+    "amber": "#f3b33d",
+    "red": "#ee6d5f",
+    "green": "#83d39f"
+  },
+  "type": {
+    "display": "Bricolage Grotesque",
+    "data": "DM Mono"
+  },
+  "surfaces": ["lobby", "account-dialogs", "arena", "spectator", "result-dialog"],
+  "constraints": ["preserve existing backend contracts", "server-authoritative clocks", "keyboard support", "mobile layout", "Portuguese UI copy"]
+}

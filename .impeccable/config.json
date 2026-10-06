@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "flat-type-hierarchy",
+        "value": "*",
+        "files": [
+          "src/frontend/templates/index.html"
+        ],
+        "createdAt": "2026-10-06T01:02:11.986Z",
+        "reason": "Typography hierarchy is defined in the linked stylesheet; h1, h2, and h3 now have distinct scale steps. The detector attributes this markup-only finding to the template."
+      }
+    ]
+  }
+}
