@@ -1,57 +1,118 @@
 # Caissa
 
+![Caissa lobby](docs/screenshots/lobby.png)
+
+Caissa is a casual, real-time chess application built to be genuinely playable while demonstrating server-authoritative state, concurrent players, reconnection, spectators, persistence, and event-driven UI.
+
+It is intentionally focused on small, friendly rooms rather than ratings, tournaments, matchmaking at scale, or competing with large chess platforms. The project is also a portfolio piece: the product experience is simple, but the underlying state transitions are explicit and testable.
+
+[![Tests](https://github.com/SatoshoiDaemon/Caissa/actions/workflows/ci.yml/badge.svg)](https://github.com/SatoshoiDaemon/Caissa/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-amber.svg)](LICENSE)
+
 Official repository: [github.com/SatoshoiDaemon/Caissa](https://github.com/SatoshoiDaemon/Caissa)
 
-Caissa is a local real-time multiplayer chess prototype. Its purpose is to demonstrate server-authoritative state management, authenticated WebSocket events, concurrent game sessions, Redis coordination, and MongoDB persistence.
+## What is implemented
 
-It is intentionally not designed to compete with chess platforms such as chess.com. The project focuses on room membership, player authorization, ordered state transitions, reconnection, persistence, and conflict handling.
+- Local two-player games.
+- Authenticated public and code-only rooms.
+- Temporary per-game player tokens for authorization.
+- Anonymous read-only spectator tokens for public rooms.
+- REST and Socket.IO gameplay using the same server-side rules.
+- MongoDB persistence for games, rooms, accounts, sessions, and results.
+- Redis coordination for locks, rate limits, presence, pub/sub, and Socket.IO scaling primitives.
+- Server-authoritative clocks with `bullet`, `blitz`, `rapid`, and `classical` presets.
+- Reconnection with a 60-second grace period and abandonment handling.
+- Draw offers, resignation, timeout, checkmate, stalemate, and final-state persistence.
+- Account profiles, recovery codes, statistics, and match history.
+- Responsive Portuguese interface with keyboard support, reduced-motion behavior, and a charcoal/amber mechanical control-panel visual language.
+
+## Screenshots
+
+### Lobby
+
+The lobby is the operational entry point for local play, room creation, invite-code entry, and public room discovery.
+
+![Caissa lobby](docs/screenshots/lobby.png)
+
+### Authentication
+
+Authentication is a dedicated surface for login, registration, recovery, and one-time recovery-code handling.
+
+![Caissa login](docs/screenshots/login.png)
+
+The arena is entered from the lobby and keeps the board, players, clocks, persistent game state, move history, and spectator state in focus. Additional arena captures can be added to `docs/screenshots/` as the visual test suite grows.
+
+## Technical decisions
+
+### MongoDB is the durable source of truth
+
+Game state is persisted as a complete document: FEN, active color, castling rights, en-passant target, move counters, move history, status, winner, version, players, reconnection metadata, and clock fields. MongoDB is also used for users, opaque sessions, recovery-code hashes, rooms, and account game results.
+
+The project is designed to start from a clean local database, making the persisted state explicit from the first run.
+
+### Redis coordinates; it does not own the game
+
+Redis is limited to short-lived coordination: per-game locks, rate limiting, player presence, pub/sub, and Socket.IO message coordination. MongoDB remains authoritative after restarts and during concurrent transitions.
+
+### The server owns authority
+
+The browser never decides its color, turn, room membership, clock, or final result. REST and Socket.IO commands validate the same token, room, game, turn, status, version, and chess move constraints. A mutation is broadcast only after persistence succeeds.
+
+### Tokens are scoped
+
+Permanent authentication uses an opaque `HttpOnly` session cookie. A player token is scoped to one game and is stored server-side only as a hash. Spectator tokens are separate, temporary, read-only identities. Logout does not invalidate an already-started game token; the game token remains governed by the game lifecycle.
+
+### Clocks are server-authoritative
+
+The official modes are fixed on the server:
+
+| Mode | Initial time | Increment |
+| --- | ---: | ---: |
+| Bullet | 60 seconds | 0 seconds |
+| Blitz | 5 minutes | 0 seconds |
+| Rapid | 10 minutes | 0 seconds |
+| Classical | 30 minutes | 0 seconds |
+
+The frontend renders `white_time_remaining_ms`, `black_time_remaining_ms`, `active_clock_color`, and related metadata received from the backend. It does not decrement the clock locally.
 
 ## Architecture
 
 ```text
-Browser ── REST/WebSocket ── Flask + Flask-SocketIO
-                              │
-                 ┌────────────┴────────────┐
-                 │                         │
-              MongoDB                    Redis
-        durable game state       locks, rate limits,
-        and move history          presence and events
+Browser
+  │
+  ├── REST /api/v1
+  └── Socket.IO events
+          │
+          ▼
+Flask application + domain services
+          │
+  ┌───────┴────────┐
+  ▼                ▼
+MongoDB          Redis
+durable state    locks, rate limits,
+and history      presence, pub/sub
 ```
 
-- MongoDB is the source of truth for games, rooms, players, state versions, and move history.
-- Redis coordinates only short-lived locks, rate limiting, presence, pub/sub, and Socket.IO coordination. It is never the source of truth for a game.
-- The browser is never trusted to provide its own color, room membership, or turn authority.
-- Every online player receives an opaque per-game token. Only its SHA-256 hash is stored.
-- Moves use a per-game Redis lock and optimistic MongoDB versioning.
-- Reconnecting with the original token restores the persisted FEN, turn, status, version, history, and clock metadata.
-- A duplicate connection for the same player replaces the previous transient Socket.IO presence without creating another player.
-- Public rooms require an authenticated account, while code-only rooms remain unlisted and can be shared privately.
-- Anonymous spectators receive short-lived read-only tokens; spectator connections can observe state and clocks but cannot mutate games.
-- Competitive room clocks are calculated by the server, persisted in MongoDB, and end games by timeout before accepting a late move.
-- Draw offers, resignation, disconnection, reconnection, abandonment, and timeout are persisted state transitions with a 60-second reconnection grace period.
-- SQLite is not part of the runtime. The current database starts empty by design; old SQLite data is disposable for this migration.
-
-The backend lives under `src/backend` and the browser application under `src/frontend`. Python modules and JSON fields use `snake_case`; JavaScript functions use `camelCase`; Socket.IO event names use `snake_case`; API routes are versioned under `/api/v1`.
-
-## Local setup
-
-Requirements: Python 3.10+, Docker Compose, and a browser.
-
-```bash
-cp .env.example .env
-# Replace SECRET_KEY with a long random value
-docker compose up -d
-python -m venv .venv
-source .venv/bin/activate
-pip install -e '.[dev]'
-PYTHONPATH=src python -m backend.run
+```text
+src/
+├── backend/
+│   ├── app/             configuration and error handling
+│   ├── api/routes/      REST resources and validation
+│   ├── chess_logic/     board state and chess rules
+│   ├── services/        state transitions and authorization
+│   ├── realtime/        Socket.IO commands and events
+│   ├── infrastructure/ MongoDB, Redis, rate limiting, repositories
+│   └── run.py           local application entry point
+└── frontend/
+    ├── templates/       application shell
+    └── static/          CSS, board, router, UI, realtime client
 ```
 
-Open http://127.0.0.1:5000.
+The frontend is a progressively enhanced single-page shell. Explicit Flask entry routes make `/`, `/home`, `/login`, `/u/<username>`, and `/room/<room_code>` refreshable without catching API, static, or unknown paths.
 
-The Compose file runs only MongoDB and Redis. The application itself runs directly from Python so that the backend remains easy to inspect and debug.
+## API surface
 
-## API
+### Games
 
 ```text
 POST /api/v1/games
@@ -59,21 +120,32 @@ GET  /api/v1/games/{game_id}
 POST /api/v1/games/{game_id}/reconnect
 POST /api/v1/games/{game_id}/moves
 GET  /api/v1/games/{game_id}/moves/{position}
+POST /api/v1/games/{game_id}/resign
+POST /api/v1/games/{game_id}/draw/offer
+POST /api/v1/games/{game_id}/draw/accept
+POST /api/v1/games/{game_id}/draw/decline
+```
 
+### Rooms
+
+```text
 GET  /api/v1/rooms
 POST /api/v1/rooms
 GET  /api/v1/rooms/{room_code}
 POST /api/v1/rooms/{room_code}/join
 POST /api/v1/rooms/{room_code}/spectate
+```
 
-POST /api/v1/auth/register
-POST /api/v1/auth/login
-POST /api/v1/auth/logout
-GET  /api/v1/auth/me
-POST /api/v1/auth/password
-POST /api/v1/auth/recovery
-POST /api/v1/auth/recovery-codes
+### Accounts and profiles
 
+```text
+POST  /api/v1/auth/register
+POST  /api/v1/auth/login
+POST  /api/v1/auth/logout
+GET   /api/v1/auth/me
+POST  /api/v1/auth/password
+POST  /api/v1/auth/recovery
+POST  /api/v1/auth/recovery-codes
 GET   /api/v1/users/{username}
 GET   /api/v1/users/{username}/stats
 GET   /api/v1/users/{username}/games
@@ -82,43 +154,71 @@ GET   /api/v1/users/me/stats
 GET   /api/v1/users/me/games
 ```
 
-Mutation requests require `Authorization: Bearer <player_token>`. WebSocket clients use the same token in `join_room`, `make_move`, `offer_draw`, `accept_draw`, and `resign_game` events.
+### Socket.IO events
 
-The home page lists non-expired public rooms with their creator, opponent, mode, status, clocks, and spectator count. A spectator first calls `/spectate`, then connects with the returned temporary token using the `spectate_room` Socket.IO event. Spectators receive `room_state`, `move_made`, `clock_updated`, and `game_ended`, but all mutation events are rejected server-side.
+Players use `join_room`, `make_move`, `offer_draw`, `accept_draw`, `decline_draw`, and `resign_game`. The server publishes `room_state`, `room_joined`, `player_joined`, `move_made`, `clock_updated`, `draw_offered`, `draw_declined`, `player_disconnected`, `player_reconnected`, `spectator_joined`, `game_ended`, and `server_error`.
 
-## Browser routes and clocks
+Spectators connect with `spectate_room` and receive state updates without mutation privileges.
 
-The single-page frontend supports direct navigation and refresh at `/`, `/home`, `/login`, `/u/<username>`, and `/room/<room_code>`. Flask serves the application shell only for these explicit routes; `/api/v1/...`, static files, and unknown paths retain their normal behavior.
+## Run locally
 
-Room clocks use server-authoritative presets: `bullet` (1 minute), `blitz` (5 minutes), `rapid` (10 minutes), and `classical` (30 minutes). The browser renders `*_time_remaining_ms` values returned by the server and never decrements or calculates the clock locally.
+Requirements: Python 3.10+, Docker Compose, and a browser.
 
-Player refresh/reconnection uses the temporary per-game token held in `sessionStorage` and `POST /api/v1/games/<game_id>/reconnect`. A room without a valid player token is opened as a read-only spectator only when the room policy permits it; code-only rooms are not silently downgraded.
+```bash
+git clone https://github.com/SatoshoiDaemon/Caissa.git
+cd Caissa
+cp .env.example .env
+# Replace SECRET_KEY in .env with a long random value
+python -m venv .venv
+source .venv/bin/activate
+pip install -e '.[dev]'
+docker compose up -d
+PYTHONPATH=src python -m backend.run
+```
 
-Competitive clocks use server-side mode presets: bullet (60 seconds), blitz (5 minutes), rapid (10 minutes), and classical (30 minutes). MongoDB persists `white_time_remaining_ms`, `black_time_remaining_ms`, `active_clock_color`, `clock_started_at`, `clock_increment_ms`, and `clock_version`. The browser renders received values and never decrements the clock locally.
+Open <http://127.0.0.1:5000>.
 
-The realtime lifecycle uses `offer_draw`, `accept_draw`, `decline_draw`, `resign_game`, `player_disconnected`, `player_reconnected`, and `game_ended`. Mutating events may include an `event_id`; repeated IDs return the persisted result without applying a second transition.
+The application runs directly with Python. Compose provides only MongoDB and Redis, each with a named local volume and healthcheck.
 
-Account authentication uses an opaque `caissa_session` HttpOnly cookie. Passwords and recovery codes are hashed with Argon2id. Recovery codes are generated once, shown once, and can be downloaded as `caissa-recovery-codes.txt`. There is no email-based recovery.
+Useful commands:
 
-## Quality commands
+```bash
+make services       # start MongoDB and Redis
+make services-down  # stop services
+make run            # start Caissa
+make test           # run pytest
+make lint           # Ruff and Black checks
+make security       # Bandit scan
+make reset-db       # destructive reset with RESET_CONFIRM=CAISSA
+```
+
+## Testing strategy
+
+The test suite is separated by responsibility:
+
+- `tests/unit/` — chess rules, validation, tokens, clocks, and state transitions.
+- `tests/api/` — REST authorization, rooms, accounts, game state, and frontend compatibility.
+- `tests/realtime/` — Socket.IO authentication and event authorization.
+- `tests/integration/` — real infrastructure boundaries; tests are marked `integration` where required.
+
+Before opening a pull request, run:
 
 ```bash
 make test
 make lint
 make security
-make run
 ```
 
-Integration tests that require real MongoDB and Redis are marked with `integration`.
+## Contributing
 
-Because Caissa has no production data yet, the initial schema is intentionally destructive. To reset all game, account, session, recovery-code, and statistics collections:
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening an issue or pull request. Changes should preserve the server-authoritative model, use the existing naming conventions, include tests for behavior changes, and keep frontend changes compatible with the current REST and Socket.IO contracts.
 
-```bash
-make reset-db
-```
+Security reports should follow [SECURITY.md](SECURITY.md). This project follows the expectations in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-The command requires the explicit `RESET_CONFIRM=CAISSA` guard and performs no migration.
+## License
 
-## Scope
+Caissa is released under the [MIT License](LICENSE).
 
-This project is a portfolio prototype for real-time systems engineering. It prioritizes authorization, concurrency, state persistence, clocks, public room discovery, spectator access, and event delivery over rankings, matchmaking, AI, or horizontal production deployment.
+## Current scope
+
+Caissa currently prioritizes casual real-time play, rooms, spectators, persistence, reconnection, clocks, profiles, and reliable state transitions. Ratings, rankings, tournaments, matchmaking, chess AI, chat, email recovery, and horizontal production deployment are intentionally outside the current scope.

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 INDEX_HTML = PROJECT_ROOT / "src" / "frontend" / "templates" / "index.html"
 FRONTEND_JS = PROJECT_ROOT / "src" / "frontend" / "static" / "js"
@@ -36,7 +35,6 @@ def test_frontend_uses_official_room_contracts():
     html = INDEX_HTML.read_text()
     chess_game = (FRONTEND_JS / "chess_game.js").read_text()
     ui_handler = (FRONTEND_JS / "ui_handler.js").read_text()
-    router = (FRONTEND_JS / "app_router.js").read_text()
     assert "initial_time_seconds" not in html
     assert "increment_seconds" not in chess_game
     assert "white_time_remaining_ms" in ui_handler
