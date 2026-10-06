@@ -84,11 +84,7 @@ class ChessBoard {
         const pieceElement = document.createElement('span');
         pieceElement.className = 'piece';
         if (animate) pieceElement.classList.add('piece-arriving');
-        pieceElement.textContent = this.getPieceSymbol(piece.type, piece.color);
-        pieceElement.style.color = piece.color === 'white' ? '#f0d9b5' : '#3d2817';
-        pieceElement.style.textShadow = piece.color === 'white' 
-            ? '1px 1px 2px rgba(0,0,0,0.3)' 
-            : '1px 1px 2px rgba(255,255,255,0.3)';
+        pieceElement.innerHTML = this.getPieceSvg(piece.type, piece.color);
 
         square.innerHTML = '';
         square.appendChild(pieceElement);
@@ -100,6 +96,20 @@ class ChessBoard {
         if (!baseSymbol) return '';
         
         return baseSymbol;
+    }
+
+    getPieceSvg(type, color) {
+        const fill = color === 'white' ? '#f0d9b5' : '#3d2817';
+        const stroke = color === 'white' ? '#6b4f32' : '#e0a33a';
+        const shapes = {
+            p: '<circle cx="50" cy="24" r="12"/><path d="M34 39c3-7 29-7 32 0l-5 18H39zM29 63h42l7 12H22z"/>',
+            r: '<path d="M27 20h10v12h8V20h10v12h8V20h10v21H27zM35 42h30l6 30H29zM20 72h60v10H20z"/>',
+            n: '<path d="M30 78c2-14 9-20 18-27-7-8-9-17-5-27l8-13 5 11 14 5c8 3 12 10 10 18-2 9-9 15-20 17l-3 6 13 10z"/><circle cx="61" cy="28" r="3" fill="'+stroke+'" stroke="none"/>',
+            b: '<path d="M50 13c9 0 14 8 10 16-2 5-6 9-10 12 7 5 11 11 13 19H37c2-8 6-14 13-19-4-3-8-7-10-12-4-8 1-16 10-16zM27 68h46l7 12H20z"/><path d="M45 19l10 14" fill="none" stroke="'+stroke+'" stroke-width="4"/>',
+            q: '<path d="M21 22l13 10 16-20 16 20 13-10-6 39H27zM25 67h50l7 13H18z"/><circle cx="34" cy="18" r="5"/><circle cx="50" cy="10" r="5"/><circle cx="66" cy="18" r="5"/>',
+            k: '<path d="M44 10h12v12h12v10H56v10c9 4 14 11 15 20H29c1-9 6-16 15-20V32H32V22h12zM24 70h52l7 10H17z"/>'
+        };
+        return `<svg class="piece-svg" viewBox="0 0 100 90" role="img" aria-label="${this.getPieceName(type)}" style="fill:${fill};stroke:${stroke};stroke-width:2;stroke-linejoin:round;filter:drop-shadow(0 3px 2px rgba(0,0,0,.3))">${shapes[type] || ''}</svg>`;
     }
 
     clearPieces() {

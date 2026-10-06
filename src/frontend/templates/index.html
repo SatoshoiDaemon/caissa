@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#111416">
     <title>Caissa — Arena de xadrez</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style.css?v=6">
 </head>
 <body>
     <div class="app-shell">
         <header class="topbar">
             <a class="brand" href="/home" data-route="/home" aria-label="Caissa, voltar ao lobby">
-                <span class="brand-mark"><img class="brand-logo" src="assets/caissa-logo.png" alt="" aria-hidden="true"></span>
+                <span class="brand-mark"><img class="brand-logo" src="/assets/caissa-logo.png" alt="" aria-hidden="true"></span>
                 <span><strong>CAISSA</strong><small>REAL-TIME CHESS</small></span>
             </a>
             <div class="topbar-meta">
@@ -29,7 +29,7 @@
         <main id="login-page" class="page-view hidden" aria-labelledby="login-page-title">
             <div class="auth-shell">
                 <section class="auth-panel">
-                    <a class="auth-brand" href="/home" data-route="/home" aria-label="Caissa, voltar ao lobby"><span class="brand-mark"><img class="brand-logo" src="assets/caissa-logo.png" alt="" aria-hidden="true"></span><span><strong>CAISSA</strong><small>REAL-TIME CHESS</small></span></a>
+                    <a class="auth-brand" href="/home" data-route="/home" aria-label="Caissa, voltar ao lobby"><span class="brand-mark"><img class="brand-logo" src="/assets/caissa-logo.png" alt="" aria-hidden="true"></span><span><strong>CAISSA</strong><small>REAL-TIME CHESS</small></span></a>
                     <div id="auth-mode-login" class="auth-mode" data-auth-mode="login">
                         <p class="section-kicker">ENTRAR NA ARENA</p><h1 id="login-page-title">Volte ao jogo.</h1><p class="auth-lede">Entre para guardar seu perfil e continuar sua história no tabuleiro.</p>
                         <form id="page-login-form" novalidate><label for="page-login-username">Username</label><input id="page-login-username" class="input-field" autocomplete="username" required><small id="page-login-username-error" class="field-error" role="alert"></small><label for="page-login-password">Senha</label><input id="page-login-password" class="input-field" type="password" autocomplete="current-password" required><small id="page-login-password-error" class="field-error" role="alert"></small><button id="btn-page-login-submit" class="button button-amber full-width" type="submit">Entrar</button></form>
@@ -40,7 +40,7 @@
                     <div id="auth-recovery-codes" class="auth-mode hidden" data-auth-mode="codes"><p class="section-kicker">GUARDE AGORA</p><h1>Seus códigos.</h1><p class="auth-lede">Eles serão exibidos somente agora. Baixe ou copie o conjunto antes de continuar.</p><pre id="page-recovery-codes-output" class="recovery-codes-output"></pre><div class="dialog-buttons"><button id="btn-page-copy-recovery" class="button button-ghost">Copiar todos</button><button id="btn-page-download-recovery" class="button button-amber">Baixar arquivo</button></div><p class="warning-text">Sem e-mail, perder sua senha e todos os códigos significa perder a conta permanentemente.</p><button id="btn-page-finish-recovery" class="button button-link full-width" type="button">Ir para o lobby</button></div>
                     <button id="btn-page-back-home" class="back-button auth-back" type="button"><span aria-hidden="true">←</span> Lobby</button>
                 </section>
-                <aside class="auth-aside"><img class="auth-aside-logo" src="assets/caissa-logo.png" alt="" aria-hidden="true"><p class="section-kicker">UMA ARENA CASUAL</p><h2>Jogue. Assista.<br><em>Volte ao ritmo.</em></h2><p>Uma identidade persistente para cada partida, sala e movimento.</p></aside>
+                <aside class="auth-aside"><img class="auth-aside-logo" src="/assets/caissa-logo.png" alt="" aria-hidden="true"><p class="section-kicker">UMA ARENA CASUAL</p><h2>Jogue. Assista.<br><em>Volte ao ritmo.</em></h2><p>Uma identidade persistente para cada partida, sala e movimento.</p></aside>
             </div>
         </main>
 
@@ -105,6 +105,6 @@
     <div id="promotion-dialog" class="dialog hidden" role="dialog" aria-modal="true" aria-labelledby="promotion-title"><div class="dialog-content promotion-dialog-content"><p class="section-kicker">MOVIMENTO ESPECIAL</p><h2 id="promotion-title">Escolha sua promoção.</h2><p class="dialog-lede">A decisão é sua. O servidor valida o movimento.</p><div class="promotion-options" role="group" aria-label="Peça para promoção"><button class="button button-ghost promotion-option" data-promotion="q" aria-label="Promover para dama">♛<span>Dama</span></button><button class="button button-ghost promotion-option" data-promotion="r" aria-label="Promover para torre">♜<span>Torre</span></button><button class="button button-ghost promotion-option" data-promotion="b" aria-label="Promover para bispo">♝<span>Bispo</span></button><button class="button button-ghost promotion-option" data-promotion="n" aria-label="Promover para cavalo">♞<span>Cavalo</span></button></div></div></div>
     <div id="confirm-dialog" class="dialog hidden" role="dialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message"><div class="dialog-content"><p class="section-kicker">CONFIRME A AÇÃO</p><h2 id="confirm-title">Tem certeza?</h2><p id="confirm-message" class="dialog-lede"></p><div class="dialog-buttons"><button id="btn-confirm-action" class="button button-amber">Confirmar</button><button id="btn-cancel-action" class="button button-link">Cancelar</button></div></div></div>
     <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script><script src="/js/chess_board.js?v=5"></script><script src="/js/chess_game.js?v=5"></script><script src="/js/ui_handler.js?v=5"></script><script src="/js/multiplayer.js?v=5"></script><script src="/js/app_router.js?v=2"></script><script src="/js/visual_effects.js?v=2"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script><script src="/js/chess_board.js?v=6"></script><script src="/js/chess_game.js?v=5"></script><script src="/js/ui_handler.js?v=5"></script><script src="/js/multiplayer.js?v=5"></script><script src="/js/app_router.js?v=2"></script><script src="/js/visual_effects.js?v=2"></script>
 </body>
 </html>

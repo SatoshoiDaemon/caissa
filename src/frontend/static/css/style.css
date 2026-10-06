@@ -287,3 +287,7 @@ body.dialog-open { overscroll-behavior:none; }
 @media (max-width:520px) { .auth-panel { border-left:0; border-right:0; padding:26px 20px; }.auth-shell { padding-inline:0; }.profile-identity-large { align-items:start; flex-direction:column; }.profile-avatar-large { height:72px; width:72px; }.profile-hero h1 { font-size:clamp(2.5rem,15vw,4.2rem); }.profile-content-grid { padding-inline:16px; }.profile-security-panel { margin-inline:16px; }.profile-stat-module,.profile-history-module,.profile-security-panel { padding:17px; }.section-heading { align-items:start; }.room-filters { margin-top:14px; } }
 .security-form { display:grid; gap:0; margin-top:24px; max-width:440px; }.security-form .button { margin-top:16px; }.security-form input + input { margin-top:8px; }
 .player-link { color:var(--ink); display:block; font-size:.86rem; font-weight:600; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.player-link:hover { color:var(--amber); }
+
+/* Keep chess symbols out of the UI font fallback chain. */
+.piece,.player-avatar,.captured-pieces,.tile-icon,.promotion-option { font-family:'Noto Sans Symbols 2','Segoe UI Symbol','DejaVu Sans',sans-serif; }
+.piece-svg { display:block; height:.86em; overflow:visible; width:.86em; }

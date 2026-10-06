@@ -1,7 +1,5 @@
 # Caissa
 
-![Caissa lobby](docs/screenshots/lobby.png)
-
 Caissa is a casual, real-time chess application built to be genuinely playable while demonstrating server-authoritative state, concurrent players, reconnection, spectators, persistence, and event-driven UI.
 
 It is intentionally focused on small, friendly rooms rather than ratings, tournaments, matchmaking at scale, or competing with large chess platforms. The project is also a portfolio piece: the product experience is simple, but the underlying state transitions are explicit and testable.
@@ -34,13 +32,13 @@ The lobby is the operational entry point for local play, room creation, invite-c
 
 ![Caissa lobby](docs/screenshots/lobby.png)
 
-### Authentication
+### Arena and authentication
 
-Authentication is a dedicated surface for login, registration, recovery, and one-time recovery-code handling.
+The arena is the main game surface for the board, players, clocks, persistent game state, move history, and spectator state. Authentication is a dedicated surface for login, registration, recovery, and one-time recovery-code handling.
 
 ![Caissa login](docs/screenshots/login.png)
 
-The arena is entered from the lobby and keeps the board, players, clocks, persistent game state, move history, and spectator state in focus. Additional arena captures can be added to `docs/screenshots/` as the visual test suite grows.
+The screenshot above shows the authentication entry point; an arena capture should be added to `docs/screenshots/arena.png` after a stable two-player browser capture is available. The README intentionally does not use a mock board image as evidence of a tested flow.
 
 ## Technical decisions
 
