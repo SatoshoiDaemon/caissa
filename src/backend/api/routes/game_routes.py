@@ -61,6 +61,21 @@ def create_game_blueprint():
     def get_game(game_id):
         return jsonify(_service().get_state(validate_game_id(game_id)))
 
+    @blueprint.get("/<game_id>/pgn")
+    def get_pgn(game_id):
+        return current_app.response_class(
+            _service().get_pgn(validate_game_id(game_id)), mimetype="application/x-chess-pgn"
+        )
+
+    @blueprint.post("/import")
+    def import_game():
+        data = json_body(request)
+        pgn = data.get("pgn")
+        if not isinstance(pgn, str):
+            raise ApiError("pgn is required", 400)
+        state = _service().import_pgn(pgn)
+        return jsonify(state), 201
+
     @blueprint.post("/<game_id>/reconnect")
     def reconnect_game(game_id):
         game_id = validate_game_id(game_id)

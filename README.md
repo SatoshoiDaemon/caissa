@@ -115,6 +115,8 @@ The frontend is a progressively enhanced single-page shell. Explicit Flask entry
 ```text
 POST /api/v1/games
 GET  /api/v1/games/{game_id}
+GET  /api/v1/games/{game_id}/pgn
+POST /api/v1/games/import
 POST /api/v1/games/{game_id}/reconnect
 POST /api/v1/games/{game_id}/moves
 GET  /api/v1/games/{game_id}/moves/{position}
@@ -206,6 +208,10 @@ make test
 make lint
 make security
 ```
+
+The current chess-rule coverage and known rule gaps are documented in
+[docs/chess-rules.md](docs/chess-rules.md). Missing rules are recorded as
+reference material for future exploration, not as a required completion plan.
 
 ## Contributing
 

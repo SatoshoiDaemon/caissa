@@ -3,10 +3,19 @@ from datetime import datetime, timedelta, timezone
 
 from ..app.errors import ApiError
 from ..chess_logic.chess_game import ChessGame, Color
+from ..chess_logic.pgn import export_pgn, import_pgn
 from ..infrastructure.rate_limiter import GameLock
 from .player_service import PlayerService
 
-FINAL_STATUSES = {"checkmate", "stalemate", "draw", "resignation", "timeout", "abandonment"}
+FINAL_STATUSES = {
+    "checkmate",
+    "stalemate",
+    "draw",
+    "resignation",
+    "timeout",
+    "abandonment",
+    "imported",
+}
 RECONNECT_GRACE_SECONDS = 60
 CLOCK_PRESETS = {
     "bullet": {"time_ms": 60_000, "increment_ms": 0},
@@ -53,11 +62,14 @@ class GameService:
             "version": 0,
             "current_player": "white",
             "fen": chess_game.to_fen(),
+            "initial_fen": chess_game.to_fen(),
             "castling_rights": chess_game._castling_rights_string(),
             "en_passant_target": chess_game.en_passant_target,
             "halfmove_clock": chess_game.halfmove_clock,
             "fullmove_number": chess_game.fullmove_number,
             "move_history": [],
+            "position_history": [chess_game.position_key()],
+            "draw_reason": None,
             "white": {
                 "name": player_name,
                 "user_id": user["_id"] if user else None,
@@ -232,6 +244,48 @@ class GameService:
                 document = self.games.get(game_id)
         return self._response(document, self._load_game(document))
 
+    def get_pgn(self, game_id):
+        return export_pgn(self._get_game(game_id))
+
+    def import_pgn(self, pgn):
+        try:
+            game, headers, result = import_pgn(pgn)
+        except Exception as error:
+            if isinstance(error, ApiError):
+                raise
+            raise ApiError(str(error), 400) from error
+        now = datetime.now(timezone.utc)
+        initial_fen = headers.get("FEN", ChessGame().to_fen())
+        document = {
+            "_id": str(uuid.uuid4()),
+            "mode": "imported",
+            "status": "imported",
+            "winner": None,
+            "draw_reason": None,
+            "version": 0,
+            "current_player": game.current_player.value,
+            "fen": game.to_fen(),
+            "initial_fen": initial_fen,
+            "castling_rights": game._castling_rights_string(),
+            "en_passant_target": game.en_passant_target,
+            "halfmove_clock": game.halfmove_clock,
+            "fullmove_number": game.fullmove_number,
+            "move_history": game.move_history,
+            "position_history": self._replay_position_history(initial_fen, game.move_history),
+            "white": {"name": headers.get("White", "White")},
+            "black": {"name": headers.get("Black", "Black")},
+            "draw_offer": {"offered_by": None, "offered_at": None, "version": 0},
+            "processed_event_ids": {},
+            "pgn_headers": headers,
+            "pgn_result": result,
+            **self._clock_document("blitz"),
+            "last_activity_at": now,
+            "created_at": now,
+            "updated_at": now,
+        }
+        self.games.create(document)
+        return self._response(document, game)
+
     def possible_moves(self, game_id, position):
         document = self._get_game(game_id)
         game = self._load_game(document)
@@ -252,7 +306,12 @@ class GameService:
             if self._consume_clock(document, moving_color):
                 winner = "black" if moving_color == "white" else "white"
                 timeout_update = self._state_document(
-                    game, "timeout", winner, document.get("clock")
+                    game,
+                    "timeout",
+                    winner,
+                    document.get("clock"),
+                    None,
+                    self._position_history(document, game),
                 )
                 if not self.games.finish(
                     game_id, document["version"], timeout_update, "timeout", winner
@@ -273,8 +332,12 @@ class GameService:
             if not game.move(from_pos, to_pos, promotion):
                 raise ApiError("invalid move", 400)
             self._switch_clock_after_move(document, moving_color, game.current_player.value)
-            status, winner = self._result(game)
-            new_document = self._state_document(game, status, winner, document.get("clock"))
+            position_history = self._position_history(document, game)
+            position_history.append(game.position_key())
+            status, winner, draw_reason = self._result(game, position_history)
+            new_document = self._state_document(
+                game, status, winner, document.get("clock"), draw_reason, position_history
+            )
             new_document["draw_offer"] = {
                 "offered_by": None,
                 "offered_at": None,
@@ -385,7 +448,12 @@ class GameService:
             update = {
                 "last_activity_at": now,
                 **self._state_document(
-                    self._load_game(document), status, winner, self._clock_from_document(document)
+                    self._load_game(document),
+                    status,
+                    winner,
+                    self._clock_from_document(document),
+                    "agreement" if status == "draw" else None,
+                    self._position_history(document, self._load_game(document)),
                 ),
                 "draw_offer": {
                     "offered_by": None,
@@ -510,7 +578,35 @@ class GameService:
         return game
 
     @staticmethod
-    def _state_document(game, status="active", winner=None, clock=None):
+    def _position_history(document, game):
+        history = document.get("position_history")
+        if history:
+            return [tuple(item) for item in history]
+        replay = ChessGame()
+        if document.get("initial_fen"):
+            replay.load_from_fen(document["initial_fen"])
+        positions = [replay.position_key()]
+        for move in document.get("move_history", []):
+            if not replay.move(move["from"], move["to"], move.get("promotion")):
+                return [game.position_key()]
+            positions.append(replay.position_key())
+        return positions
+
+    @staticmethod
+    def _replay_position_history(initial_fen, move_history):
+        replay = ChessGame()
+        if initial_fen:
+            replay.load_from_fen(initial_fen)
+        positions = [replay.position_key()]
+        for move in move_history:
+            replay.move(move["from"], move["to"], move.get("promotion"))
+            positions.append(replay.position_key())
+        return positions
+
+    @staticmethod
+    def _state_document(
+        game, status="active", winner=None, clock=None, draw_reason=None, position_history=None
+    ):
         now = datetime.now(timezone.utc)
         stored_clock = GameService._normalize_clock(clock or {})
         if status != "active":
@@ -519,6 +615,7 @@ class GameService:
         return {
             "status": status,
             "winner": winner,
+            "draw_reason": draw_reason,
             "current_player": game.current_player.value,
             "fen": game.to_fen(),
             "castling_rights": game._castling_rights_string(),
@@ -526,6 +623,7 @@ class GameService:
             "halfmove_clock": game.halfmove_clock,
             "fullmove_number": game.fullmove_number,
             "move_history": game.move_history,
+            "position_history": position_history or [game.position_key()],
             **stored_clock,
             "clock": stored_clock,
             "last_activity_at": now,
@@ -546,6 +644,13 @@ class GameService:
                 "mode": document.get("mode", "online"),
                 "status": document.get("status", "active"),
                 "winner": document.get("winner"),
+                "draw_reason": document.get("draw_reason"),
+                "pgn_result": document.get("pgn_result"),
+                "last_move_san": (
+                    (document.get("move_history") or [])[-1].get("san")
+                    if document.get("move_history")
+                    else None
+                ),
                 "version": document.get("version", 0),
                 "draw_offer": document.get(
                     "draw_offer", {"offered_by": None, "offered_at": None, "version": 0}
@@ -596,12 +701,18 @@ class GameService:
         }
 
     @staticmethod
-    def _result(game):
+    def _result(game, position_history=None):
         if game.is_checkmate(game.current_player):
-            return "checkmate", "white" if game.current_player == Color.BLACK else "black"
+            return "checkmate", "white" if game.current_player == Color.BLACK else "black", None
         if game.is_stalemate(game.current_player):
-            return "stalemate", None
-        return "active", None
+            return "draw", None, "stalemate"
+        if game.is_insufficient_material():
+            return "draw", None, "insufficient_material"
+        if game.is_fifty_move_draw():
+            return "draw", None, "fifty_move_rule"
+        if position_history and game.is_threefold_repetition(position_history):
+            return "draw", None, "threefold_repetition"
+        return "active", None, None
 
     def _new_room_code(self):
         while True:

@@ -149,6 +149,126 @@ class ChessGame:
         king = self._find_king(color)
         return king is not None and self._is_under_attack(king[0], king[1], color)
 
+    def _effective_en_passant_target(self):
+        if not self.en_passant_target:
+            return None
+        target_row, target_col = self._pos_to_coords(self.en_passant_target)
+        pawn_row = target_row + (1 if self.current_player == Color.WHITE else -1)
+        if not 0 <= pawn_row < 8:
+            return None
+        captured = self.board[pawn_row][target_col]
+        if captured.piece_type != PieceType.PAWN:
+            return None
+        if captured.color == self.current_player:
+            return None
+        source_row = target_row + (1 if self.current_player == Color.WHITE else -1)
+        for source_col in (target_col - 1, target_col + 1):
+            if not 0 <= source_col < 8:
+                continue
+            source = self.board[source_row][source_col]
+            if source.piece_type != PieceType.PAWN or source.color != self.current_player:
+                continue
+            from_pos = self._coords_to_pos(source_row, source_col)
+            if self._is_move_valid(from_pos, self.en_passant_target, enforce_turn=False):
+                return self.en_passant_target
+        return None
+
+    def position_key(self):
+        pieces = []
+        for row in self.board:
+            for piece in row:
+                pieces.append(
+                    "-" if piece.is_empty() else piece.color.value[0] + piece.piece_type.value
+                )
+        return (
+            "/".join(pieces),
+            self.current_player.value,
+            self._castling_rights_string(),
+            self._effective_en_passant_target() or "-",
+        )
+
+    def is_threefold_repetition(self, history) -> bool:
+        current = self.position_key()
+        return sum(tuple(item) == current for item in history) >= 3
+
+    def is_fifty_move_draw(self) -> bool:
+        return self.halfmove_clock >= 100
+
+    def is_insufficient_material(self) -> bool:
+        minor_pieces = []
+        for row_index, row in enumerate(self.board):
+            for col_index, piece in enumerate(row):
+                if piece.is_empty() or piece.piece_type == PieceType.KING:
+                    continue
+                if piece.piece_type in {PieceType.PAWN, PieceType.ROOK, PieceType.QUEEN}:
+                    return False
+                minor_pieces.append((piece.piece_type, row_index, col_index, piece.color))
+
+        if not minor_pieces:
+            return True
+        if len(minor_pieces) == 1:
+            return minor_pieces[0][0] in {PieceType.BISHOP, PieceType.KNIGHT}
+        if len(minor_pieces) == 2 and all(item[0] == PieceType.BISHOP for item in minor_pieces):
+            return (minor_pieces[0][1] + minor_pieces[0][2]) % 2 == (
+                minor_pieces[1][1] + minor_pieces[1][2]
+            ) % 2
+        return False
+
+    def san_for_move(self, from_pos: str, to_pos: str, promotion: str | None = None) -> str:
+        if not self._is_move_valid(from_pos, to_pos, promotion=promotion):
+            raise ChessStateError("invalid chess move")
+        piece = self._get_piece_at(from_pos)
+        target = self._get_piece_at(to_pos)
+        _, from_col = self._pos_to_coords(from_pos)
+        _, to_col = self._pos_to_coords(to_pos)
+        is_castle = piece.piece_type == PieceType.KING and abs(to_col - from_col) == 2
+        is_capture = not target.is_empty() or (
+            piece.piece_type == PieceType.PAWN and to_pos == self.en_passant_target
+        )
+        if is_castle:
+            notation = "O-O" if to_col == 6 else "O-O-O"
+        else:
+            symbol = "" if piece.piece_type == PieceType.PAWN else piece.piece_type.value.upper()
+            disambiguation = ""
+            if piece.piece_type != PieceType.PAWN:
+                alternatives = []
+                for row in range(8):
+                    for col in range(8):
+                        candidate = self.board[row][col]
+                        if (
+                            candidate.piece_type != piece.piece_type
+                            or candidate.color != piece.color
+                        ):
+                            continue
+                        candidate_pos = self._coords_to_pos(row, col)
+                        if candidate_pos != from_pos and self._is_move_valid(
+                            candidate_pos, to_pos, enforce_turn=False
+                        ):
+                            alternatives.append(candidate_pos)
+                if alternatives:
+                    same_file = any(pos[0] == from_pos[0] for pos in alternatives)
+                    same_rank = any(pos[1] == from_pos[1] for pos in alternatives)
+                    if not same_file:
+                        disambiguation = from_pos[0]
+                    elif not same_rank:
+                        disambiguation = from_pos[1]
+                    else:
+                        disambiguation = from_pos
+            capture_marker = "x" if is_capture else ""
+            pawn_prefix = from_pos[0] if piece.piece_type == PieceType.PAWN and is_capture else ""
+            promotion_suffix = f"={promotion.upper()}" if promotion else ""
+            notation = (
+                f"{symbol}{disambiguation}{pawn_prefix}{capture_marker}{to_pos}{promotion_suffix}"
+            )
+
+        simulation = self.clone()
+        simulation._apply_move(from_pos, to_pos, promotion)
+        if simulation.is_checkmate(simulation.current_player):
+            notation += "#"
+        elif simulation._is_in_check(simulation.current_player):
+            notation += "+"
+        return notation
+
     def _pawn_move_valid(self, from_pos: str, to_pos: str) -> bool:
         piece = self._get_piece_at(from_pos)
         target = self._get_piece_at(to_pos)
@@ -347,7 +467,9 @@ class ChessGame:
     def move(self, from_pos: str, to_pos: str, promotion: str | None = None) -> bool:
         if not self._is_move_valid(from_pos, to_pos, promotion=promotion):
             return False
+        san = self.san_for_move(from_pos, to_pos, promotion)
         self._apply_move(from_pos, to_pos, promotion)
+        self.move_history[-1]["san"] = san
         return True
 
     def get_board_state(self) -> list[list[dict | None]]:
@@ -452,6 +574,53 @@ class ChessGame:
                 raise InvalidFenError("rank does not contain eight squares")
         if king_count[Color.WHITE] != 1 or king_count[Color.BLACK] != 1:
             raise InvalidFenError("FEN must contain one king per color")
+        if any(
+            piece.piece_type == PieceType.PAWN and row in {0, 7}
+            for row in range(8)
+            for piece in board[row]
+        ):
+            raise InvalidFenError("pawns cannot be on the first or last rank")
+        white_king = next(
+            (
+                self._coords_to_pos(row, col)
+                for row in range(8)
+                for col in range(8)
+                if board[row][col].piece_type == PieceType.KING
+                and board[row][col].color == Color.WHITE
+            ),
+            None,
+        )
+        black_king = next(
+            (
+                self._coords_to_pos(row, col)
+                for row in range(8)
+                for col in range(8)
+                if board[row][col].piece_type == PieceType.KING
+                and board[row][col].color == Color.BLACK
+            ),
+            None,
+        )
+        white_row, white_col = self._pos_to_coords(white_king)
+        black_row, black_col = self._pos_to_coords(black_king)
+        if max(abs(white_row - black_row), abs(white_col - black_col)) <= 1:
+            raise InvalidFenError("kings cannot be adjacent")
+        required_rooks = {
+            "K": ("e1", "h1"),
+            "Q": ("e1", "a1"),
+            "k": ("e8", "h8"),
+            "q": ("e8", "a8"),
+        }
+        for right in set(rights) if rights != "-" else set():
+            king_pos, rook_pos = required_rooks[right]
+            king_row, king_col = self._pos_to_coords(king_pos)
+            rook_row, rook_col = self._pos_to_coords(rook_pos)
+            king = board[king_row][king_col]
+            rook = board[rook_row][rook_col]
+            expected_color = Color.WHITE if right.isupper() else Color.BLACK
+            if king.piece_type != PieceType.KING or king.color != expected_color:
+                raise InvalidFenError("castling rights require the king on its original square")
+            if rook.piece_type != PieceType.ROOK or rook.color != expected_color:
+                raise InvalidFenError("castling rights require the rook on its original square")
         self.board = board
         self.current_player = Color.WHITE if active == "w" else Color.BLACK
         self.castling_rights = set() if rights == "-" else set(rights)
@@ -460,6 +629,24 @@ class ChessGame:
         self.fullmove_number = int(fullmove)
         self.move_history = []
         self.captured_pieces = {Color.WHITE: [], Color.BLACK: []}
+        if self.en_passant_target:
+            target_row, target_col = self._pos_to_coords(self.en_passant_target)
+            expected_target_row = 2 if self.current_player == Color.WHITE else 5
+            pawn_row = target_row + (1 if self.current_player == Color.WHITE else -1)
+            pawn = self.board[pawn_row][target_col]
+            if (
+                target_row != expected_target_row
+                or not self.board[target_row][target_col].is_empty()
+            ):
+                raise InvalidFenError("invalid en passant target square")
+            expected_color = Color.WHITE if self.current_player == Color.BLACK else Color.BLACK
+            if pawn.piece_type != PieceType.PAWN or pawn.color != expected_color:
+                raise InvalidFenError("en passant target lacks the moved pawn")
+        if self._is_in_check(Color.WHITE) and self._is_in_check(Color.BLACK):
+            raise InvalidFenError("both kings cannot be in check")
+        previous_player = Color.BLACK if self.current_player == Color.WHITE else Color.WHITE
+        if self._is_in_check(previous_player):
+            raise InvalidFenError("the player who just moved cannot still be in check")
 
     def to_fen(self) -> str:
         ranks = []

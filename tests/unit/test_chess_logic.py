@@ -38,8 +38,8 @@ def test_castling_requires_the_correct_rook():
     game = game_from_fen(BARE_ROOKS_FEN)
     assert game.move("e1", "g1") is True
     assert game.get_board_state()[7][5]["type"] == "r"
-    game = game_from_fen("4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1")
-    assert game.move("e1", "g1") is False
+    with pytest.raises(InvalidFenError):
+        game_from_fen("4k3/8/8/8/8/8/8/4K3 w KQkq - 0 1")
 
 
 def test_castling_rights_are_revoked_after_king_or_rook_moves():
@@ -84,7 +84,7 @@ def test_promotion_must_be_explicit_and_valid():
 
 
 def test_fen_round_trip_preserves_castling_en_passant_and_counters():
-    fen = "r3k2r/8/8/3pP3/8/8/8/R3K2R b KQkq d3 17 42"
+    fen = "r3k2r/8/8/4P3/3P4/8/8/R3K2R b KQkq d3 17 42"
     game = game_from_fen(fen)
     assert game.to_fen() == fen
     assert game.castling_rights == {"K", "Q", "k", "q"}

@@ -186,3 +186,61 @@ def test_resignation_is_idempotent_after_game_ends(client):
     )
     assert first.status_code == second.status_code == 200
     assert first.get_json()["status"] == second.get_json()["status"] == "resignation"
+
+
+def test_draw_agreement_exposes_draw_reason(client):
+    game = create_online_game(client)
+    headers = {"Authorization": f"Bearer {game['player_token']}"}
+    client.post(
+        f"/api/v1/games/{game['game_id']}/draw/offer",
+        headers=headers,
+        json={"event_id": "draw-reason-offer"},
+    )
+    black = client.post(
+        f"/api/v1/rooms/{game['room_code']}/join", json={"player_name": "Bob"}
+    ).get_json()
+    accepted = client.post(
+        f"/api/v1/games/{game['game_id']}/draw/accept",
+        headers={"Authorization": f"Bearer {black['player_token']}"},
+        json={"event_id": "draw-reason-accept"},
+    )
+    assert accepted.get_json()["draw_reason"] == "agreement"
+
+
+def test_fifty_move_rule_ends_game_and_exposes_reason(client, repositories):
+    game = client.post(
+        "/api/v1/games", json={"player_name": "Alice", "mode": "local", "black_player": "Bob"}
+    ).get_json()
+    document = repositories[0].documents[game["game_id"]]
+    document.update(
+        {
+            "fen": "4k3/8/8/8/8/8/3R4/4K3 w - - 99 1",
+            "current_player": "white",
+            "halfmove_clock": 99,
+        }
+    )
+    response = client.post(
+        f"/api/v1/games/{game['game_id']}/moves",
+        headers={"Authorization": f"Bearer {game['player_token']}"},
+        json={"from": "d2", "to": "d3"},
+    )
+    assert response.status_code == 200
+    assert response.get_json()["status"] == "draw"
+    assert response.get_json()["draw_reason"] == "fifty_move_rule"
+
+
+def test_pgn_import_is_independent_and_exportable(client):
+    imported = client.post(
+        "/api/v1/games/import",
+        json={"pgn": '[White "Alice"]\n[Black "Bob"]\n\n1. e4 e5 2. Nf3 Nc6 *'},
+    )
+    assert imported.status_code == 201
+    data = imported.get_json()
+    assert data["mode"] == "imported"
+    assert data["pgn_result"] == "*"
+    assert data["move_history"][-1]["san"] == "Nc6"
+
+    exported = client.get(f"/api/v1/games/{data['game_id']}/pgn")
+    assert exported.status_code == 200
+    assert exported.content_type == "application/x-chess-pgn"
+    assert "1. e4 e5 2. Nf3 Nc6 *" in exported.get_data(as_text=True)
