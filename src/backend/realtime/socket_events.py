@@ -89,7 +89,11 @@ def register_socket_events(socketio, app):
                 emit("player_reconnected", {"player_color": player["color"]}, to=code)
             emit(
                 "player_joined",
-                {"player_name": player["name"], "player_color": player["color"]},
+                {
+                    "player_name": player["name"],
+                    "player_color": player["color"],
+                    "game_state": state,
+                },
                 to=code,
                 include_self=False,
             )
@@ -181,8 +185,10 @@ def register_socket_events(socketio, app):
                 {"winner": result["winner"], "reason": "resignation", "game_state": result},
                 to=code,
             )
+            return {"ok": True, "game_state": result}
         except ApiError as error:
             emit("server_error", {"error": error.message})
+            return {"ok": False, "error": error.message}
 
     @socketio.on("offer_draw")
     def handle_offer_draw(data):
@@ -191,8 +197,10 @@ def register_socket_events(socketio, app):
             game_id, code, token = socket_credentials(data)
             result = service().offer_draw(game_id, token, validate_event_id(data.get("event_id")))
             emit("draw_offered", {"game_state": result}, to=code, include_self=False)
+            return {"ok": True, "game_state": result}
         except ApiError as error:
             emit("server_error", {"error": error.message})
+            return {"ok": False, "error": error.message}
 
     @socketio.on("accept_draw")
     def handle_accept_draw(data):
@@ -203,8 +211,10 @@ def register_socket_events(socketio, app):
                 game_id, token, "draw", event_id=validate_event_id(data.get("event_id"))
             )
             emit("game_ended", {"winner": None, "reason": "draw", "game_state": result}, to=code)
+            return {"ok": True, "game_state": result}
         except ApiError as error:
             emit("server_error", {"error": error.message})
+            return {"ok": False, "error": error.message}
 
     @socketio.on("decline_draw")
     def handle_decline_draw(data):
@@ -213,8 +223,10 @@ def register_socket_events(socketio, app):
             game_id, code, token = socket_credentials(data)
             result = service().decline_draw(game_id, token, validate_event_id(data.get("event_id")))
             emit("draw_declined", {"game_state": result}, to=code)
+            return {"ok": True, "game_state": result}
         except ApiError as error:
             emit("server_error", {"error": error.message})
+            return {"ok": False, "error": error.message}
 
     @socketio.on("disconnect")
     def handle_disconnect():
