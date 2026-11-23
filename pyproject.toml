@@ -28,7 +28,7 @@ dev = [
   "black>=24,<26",
   "bandit>=1.7,<2",
   "mongomock>=4.1,<5",
-  "fakeredis>=2.24,<3",
+  "fakeredis[lua]>=2.24,<3",
 ]
 
 [tool.pytest.ini_options]

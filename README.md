@@ -2,7 +2,7 @@
 
 Caissa is a casual, real-time chess application built to be genuinely playable while demonstrating server-authoritative state, concurrent players, reconnection, spectators, persistence, and event-driven UI.
 
-It is intentionally focused on small, friendly rooms rather than ratings, tournaments, matchmaking at scale, or competing with large chess platforms. The project is also a portfolio piece: the product experience is simple, but the underlying state transitions are explicit and testable.
+Caissa starts with small, friendly rooms and classical play. Its longer-term direction includes alternate rules, themed pieces, bots and matchmaking.
 
 [![Tests](https://github.com/SatoshoiDaemon/Caissa/actions/workflows/ci.yml/badge.svg)](https://github.com/SatoshoiDaemon/Caissa/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-amber.svg)](LICENSE)
@@ -106,7 +106,9 @@ src/
     └── static/          CSS, board, router, UI, realtime client
 ```
 
-The frontend is a progressively enhanced single-page shell. Explicit Flask entry routes make `/`, `/home`, `/lobby`, `/login`, `/u/<username>`, `/room/<room_code>`, and `/games/<game_id>` refreshable without catching API, static, or unknown paths. The interface supports `pt-BR` and `en-US`, remembers the selected language in the browser, and defaults to Portuguese.
+The original Flask frontend is a progressively enhanced single-page shell. Explicit Flask entry routes make `/`, `/home`, `/lobby`, `/login`, `/u/<username>`, `/room/<room_code>`, and `/games/<game_id>` refreshable without catching API, static, or unknown paths. The interface supports `pt-BR` and `en-US`, remembers the selected language in the browser, and defaults to Portuguese.
+
+The Next.js App Router frontend lives in `web/` and uses the same backend. See the [migration audit and contracts](docs/frontend-phase-1.md) for the runtime boundary and planned extension points.
 
 ## API surface
 
@@ -179,6 +181,19 @@ PYTHONPATH=src python -m backend.run
 
 Open <http://127.0.0.1:5000>.
 
+To run the Next.js frontend alongside Flask, use Node.js 20.9+:
+
+```bash
+cd web
+npm ci
+npm run dev
+```
+
+Open <http://127.0.0.1:3000>. Use the same hostname consistently. Next forwards API and
+Socket.IO traffic to Flask at `http://127.0.0.1:5000`. Set `CAISSA_BACKEND_URL` to
+point Next at another backend. If you already have a root `.env`, add your frontend
+URL to `ALLOWED_ORIGINS` and restart Flask.
+
 The application runs directly with Python. Compose provides only MongoDB and Redis, each with a named local volume and healthcheck.
 
 Useful commands:
@@ -226,4 +241,4 @@ Caissa is released under the [MIT License](LICENSE).
 
 ## Current scope
 
-Caissa currently prioritizes casual real-time play, rooms, spectators, persistence, reconnection, clocks, profiles, and reliable state transitions. Ratings, rankings, tournaments, matchmaking, chess AI, chat, email recovery, and horizontal production deployment are intentionally outside the current scope.
+Caissa currently prioritizes casual real-time play, rooms, spectators, persistence, reconnection, clocks, profiles, and reliable state transitions. The frontend migration documents the planned boundaries for custom rules, variants, bots, matchmaking and a visual editor.
